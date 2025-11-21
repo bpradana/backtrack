@@ -156,10 +156,7 @@ export const RadarDisplay: React.FC<RadarDisplayProps> = ({
                 <div className={`w-4 h-4 rounded-full shadow-lg z-10 ${nightMode ? 'bg-red-500 shadow-red-900/50' : 'bg-blue-500 shadow-blue-500/50'}`} />
             </div>
 
-            {/* Info Overlay */}
-            <div className="absolute top-4 left-4 right-4 flex justify-between text-xs font-mono opacity-70">
-                <span>{displayHeading ? `${Math.round(displayHeading)}°` : '--°'}</span>
-            </div>
+
         </div>
     );
 };

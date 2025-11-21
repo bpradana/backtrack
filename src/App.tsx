@@ -25,6 +25,14 @@ function App() {
     }
   }, [geoError]);
 
+  // Effect to update theme-color for iOS status bar
+  useEffect(() => {
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', nightMode ? '#000000' : '#ffffff');
+    }
+  }, [nightMode]);
+
   const handleStart = async () => {
     await requestPermission();
     setTrackingState('tracking');
@@ -52,6 +60,8 @@ function App() {
     return Math.max(Math.max(...distances), 50); // Min 50m scale
   }, [currentPosition, displayPath]);
 
+  const displayHeading = heading ?? currentPosition?.heading ?? 0;
+
   return (
     <div className={`relative h-screen w-full overflow-hidden flex flex-col ${nightMode ? 'bg-black text-red-500' : 'bg-white text-gray-900'}`}>
 
@@ -65,6 +75,7 @@ function App() {
             <span className={geoError ? 'text-red-500 font-bold' : ''}>
               GPS: {geoError ? 'ERROR' : (currentPosition ? 'ACTIVE' : 'WAITING')}
             </span>
+            <span>HDG: {Math.round(displayHeading)}°</span>
             <span>ACC: {currentPosition?.accuracy ? `±${Math.round(currentPosition.accuracy)}m` : '--'}</span>
             <span>SCL: {Math.round(maxDistance)}m</span>
           </div>
