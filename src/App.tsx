@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useGeolocation } from './hooks/useGeolocation';
 import { usePath } from './hooks/usePath';
 import { useCompass } from './hooks/useCompass';
@@ -6,7 +6,7 @@ import { RadarDisplay } from './components/RadarDisplay';
 import { Controls } from './components/Controls';
 import { NightModeToggle } from './components/NightModeToggle';
 import type { TrackingState } from './types';
-// import { formatDistance } from './utils/geometry';
+import { calculateDistance } from './utils/geometry';
 
 function App() {
   const [trackingState, setTrackingState] = useState<TrackingState>('idle');
@@ -16,7 +16,7 @@ function App() {
 
   const { currentPosition, error: geoError, permissionStatus } = useGeolocation(isTracking);
   const { path, clearPath, getBacktrackPath } = usePath(currentPosition, trackingState);
-  const { heading } = useCompass();
+  const { heading, requestPermission } = useCompass();
 
   // Effect to handle permission errors or denials
   useEffect(() => {
@@ -25,7 +25,8 @@ function App() {
     }
   }, [geoError]);
 
-  const handleStart = () => {
+  const handleStart = async () => {
+    await requestPermission();
     setTrackingState('tracking');
   };
 
@@ -43,12 +44,13 @@ function App() {
   };
 
   const displayPath = trackingState === 'backtracking' ? getBacktrackPath() : path;
-  // const totalDistance = path.length > 1
-  //   ? formatDistance(path.reduce((acc, point, i) => {
-  //       if (i === 0) return 0;
-  //       return acc + (point.speed || 0); // Rough estimate or calc from points
-  //     }, 0)) // This is a placeholder, real distance needs better calc
-  //   : '0 m';
+
+  // Calculate max distance for scale
+  const maxDistance = useMemo(() => {
+    if (!currentPosition || displayPath.length === 0) return 100; // Default 100m
+    const distances = displayPath.map(p => calculateDistance(currentPosition, p));
+    return Math.max(Math.max(...distances), 50); // Min 50m scale
+  }, [currentPosition, displayPath]);
 
   return (
     <div className={`relative h-screen w-full overflow-hidden flex flex-col ${nightMode ? 'bg-black text-red-500' : 'bg-white text-gray-900'}`}>
@@ -64,6 +66,7 @@ function App() {
               GPS: {geoError ? 'ERROR' : (currentPosition ? 'ACTIVE' : 'WAITING')}
             </span>
             <span>ACC: {currentPosition?.accuracy ? `±${Math.round(currentPosition.accuracy)}m` : '--'}</span>
+            <span>SCL: {Math.round(maxDistance)}m</span>
           </div>
         </div>
         <div className="pointer-events-auto">
@@ -77,8 +80,8 @@ function App() {
           currentPosition={currentPosition}
           path={displayPath}
           heading={heading}
-          isBacktracking={trackingState === 'backtracking'}
           nightMode={nightMode}
+          maxDistance={maxDistance}
         />
 
         {/* Permission Warning Overlay */}
