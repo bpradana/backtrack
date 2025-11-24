@@ -1,13 +1,16 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, useMap, Marker } from 'react-leaflet';
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { Coordinate, PathPoint } from '../types';
+import type { Coordinate, PathPoint, POI } from '../types';
 
 interface MapDisplayProps {
     currentPosition: Coordinate | null;
     path: PathPoint[];
+    pois: POI[];
     nightMode: boolean;
     heading: number | null;
+    onPOIClick: (poi: POI) => void;
 }
 
 // Component to center map on position update
@@ -24,8 +27,10 @@ const MapRecenter: React.FC<{ position: Coordinate | null }> = ({ position }) =>
 export const MapDisplay: React.FC<MapDisplayProps> = ({
     currentPosition,
     path,
+    pois,
     nightMode,
-    heading
+    heading,
+    onPOIClick
 }) => {
     if (!currentPosition) {
         return (
@@ -37,6 +42,26 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
 
     const pathCoordinates = path.map(p => [p.latitude, p.longitude] as [number, number]);
     const displayHeading = heading ?? currentPosition.heading ?? 0;
+
+    const createPOIIcon = (emoji: string, nightMode: boolean) => {
+        return L.divIcon({
+            className: 'custom-poi-icon',
+            html: `<div style="
+                background-color: ${nightMode ? '#000000' : '#ffffff'};
+                border: 2px solid ${nightMode ? '#ff3b30' : '#3b82f6'};
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 18px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            ">${emoji}</div>`,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15],
+        });
+    };
 
     return (
         <div className={`w-full h-full absolute inset-0 overflow-hidden ${nightMode ? 'invert contrast-75 hue-rotate-180' : ''}`}>
@@ -67,6 +92,18 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
                     {pathCoordinates.length > 0 && (
                         <Polyline positions={pathCoordinates} color="blue" />
                     )}
+
+                    {pois.map(poi => (
+                        <Marker
+                            key={poi.id}
+                            position={[poi.latitude, poi.longitude]}
+                            icon={createPOIIcon(poi.emoji, nightMode)}
+                            eventHandlers={{
+                                click: () => onPOIClick(poi)
+                            }}
+                        />
+                    ))}
+
                     <MapRecenter position={currentPosition} />
                 </MapContainer>
             </div>

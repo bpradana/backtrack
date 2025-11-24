@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import type { Coordinate, PathPoint } from '../types';
+import type { Coordinate, PathPoint, POI } from '../types';
 import { calculateDistance, calculateBearing } from '../utils/geometry';
 
 interface RadarDisplayProps {
     currentPosition: Coordinate | null;
     path: PathPoint[];
+    pois: POI[];
     heading: number | null;
     // isBacktracking,
     nightMode: boolean;
@@ -14,6 +15,7 @@ interface RadarDisplayProps {
 export const RadarDisplay: React.FC<RadarDisplayProps> = ({
     currentPosition,
     path,
+    pois,
     heading,
     // isBacktracking,
     nightMode,
@@ -41,25 +43,58 @@ export const RadarDisplay: React.FC<RadarDisplayProps> = ({
         return result;
     }, [maxDistance]);
 
+    // Helper to transform coordinates to radar space
+    const transformToRadar = (target: Coordinate) => {
+        if (!currentPosition) return null;
+        const distance = calculateDistance(currentPosition, target);
+        const bearing = calculateBearing(currentPosition, target);
+
+        // Convert polar (distance, bearing) to cartesian (x, y)
+        // Adjust bearing by rotation (heading) so "up" is device forward
+        const relativeBearing = bearing - displayHeading;
+        const rad = (relativeBearing - 90) * (Math.PI / 180); // -90 to make 0deg up
+
+        const x = distance * scale * Math.cos(rad);
+        const y = distance * scale * Math.sin(rad);
+
+        return { x, y, distance };
+    };
+
     // Transform path points to relative coordinates (x, y) from center
     const relativePath = useMemo(() => {
         if (!currentPosition) return [];
-
         return path.map((point) => {
-            const distance = calculateDistance(currentPosition, point);
-            const bearing = calculateBearing(currentPosition, point);
-
-            // Convert polar (distance, bearing) to cartesian (x, y)
-            // Adjust bearing by rotation (heading) so "up" is device forward
-            const relativeBearing = bearing - displayHeading;
-            const rad = (relativeBearing - 90) * (Math.PI / 180); // -90 to make 0deg up
-
-            const x = distance * scale * Math.cos(rad);
-            const y = distance * scale * Math.sin(rad);
-
-            return { x, y, id: point.id };
-        });
+            const pos = transformToRadar(point);
+            return pos ? { ...pos, id: point.id } : null;
+        }).filter((p): p is { x: number; y: number; distance: number; id: string } => p !== null);
     }, [currentPosition, path, displayHeading, scale]);
+
+    // Transform POIs
+    const relativePOIs = useMemo(() => {
+        if (!currentPosition) return [];
+        return pois.map((poi) => {
+            const pos = transformToRadar(poi);
+            if (!pos) return null;
+
+            // Check if POI is outside view radius
+            const distFromCenter = Math.sqrt(pos.x * pos.x + pos.y * pos.y);
+            const maxRadius = viewRadius - 10; // Padding
+
+            if (distFromCenter > maxRadius) {
+                // Clamp to edge
+                const angle = Math.atan2(pos.y, pos.x);
+                return {
+                    x: maxRadius * Math.cos(angle),
+                    y: maxRadius * Math.sin(angle),
+                    distance: pos.distance,
+                    isClamped: true,
+                    ...poi
+                };
+            }
+
+            return { ...pos, isClamped: false, ...poi };
+        }).filter((p): p is { x: number; y: number; distance: number; isClamped: boolean } & POI => p !== null);
+    }, [currentPosition, pois, displayHeading, scale]);
 
     if (!currentPosition) {
         return (
@@ -149,6 +184,51 @@ export const RadarDisplay: React.FC<RadarDisplayProps> = ({
                         />
                     )}
                 </g>
+
+                {/* POI Markers */}
+                {relativePOIs.map((poi) => (
+                    <g key={poi.id} transform={`translate(${poi.x}, ${poi.y})`}>
+                        {/* Pulsing effect - only if NOT clamped */}
+                        {!poi.isClamped && (
+                            <circle
+                                r="8"
+                                fill={nightMode ? '#ff3b30' : '#3b82f6'}
+                                opacity="0.3"
+                                className="animate-pulse-ring origin-center"
+                                style={{ transformBox: 'fill-box' }}
+                            />
+                        )}
+
+                        {/* Clamped Indicator (Ring) */}
+                        {poi.isClamped && (
+                            <circle
+                                r="9"
+                                fill="none"
+                                stroke={nightMode ? '#ff3b30' : '#3b82f6'}
+                                strokeWidth="1"
+                                strokeDasharray="2 2"
+                                opacity="0.7"
+                            />
+                        )}
+
+                        <circle
+                            r="6"
+                            fill={nightMode ? '#000000' : '#ffffff'}
+                            stroke={nightMode ? '#ff3b30' : '#3b82f6'}
+                            strokeWidth="1.5"
+                            opacity={poi.isClamped ? 0.7 : 1}
+                        />
+                        <text
+                            textAnchor="middle"
+                            dy=".35em"
+                            fontSize="8"
+                            pointerEvents="none"
+                            opacity={poi.isClamped ? 0.7 : 1}
+                        >
+                            {poi.emoji}
+                        </text>
+                    </g>
+                ))}
             </svg>
 
             {/* Current Position Marker (Always Center) */}

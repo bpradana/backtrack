@@ -12,3 +12,10 @@ export interface PathPoint extends Coordinate {
 }
 
 export type TrackingState = 'idle' | 'tracking' | 'backtracking';
+
+export interface POI extends Coordinate {
+    id: string;
+    name: string;
+    emoji: string;
+    createdAt: number;
+}
